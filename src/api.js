@@ -143,6 +143,22 @@ export async function unsubscribePush({ token, endpoint }) {
   return res.json();
 }
 
+// ✅ Update story (baru ditambahkan)
+export async function updateStory({ id, token, description, file, lat, lon }) {
+  const form = new FormData();
+  form.append('description', description);
+  if (file) form.append('photo', file);
+  if (lat !== undefined) form.append('lat', String(lat));
+  if (lon !== undefined) form.append('lon', String(lon));
+
+  const res = await fetch(`${BASE}/stories/${id}`, {
+    method: 'PUT',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  return res.json();
+}
+
 // helper base64
 function arrayBufferToBase64(buffer) {
   if (!buffer) return '';

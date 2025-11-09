@@ -1,8 +1,7 @@
-// src/views/detailView.js
 import { el } from '../utilities.js';
 import { createMap, addMarker, destroyMap } from '../components/map.js';
 import { getDetail } from '../api.js';
-import { addArchive, removeArchive, isArchived } from '../utils/db.js';
+import { addArchive, removeArchive, isArchived, updateArchive } from '../utils/db.js';
 
 // format tanggal Indonesia
 function formatIndonesiaDatetime(isoString) {
@@ -65,19 +64,17 @@ export default class DetailView {
       section.appendChild(img);
 
       const infoWrap = el('div', { style: 'padding:12px 0;' });
-      infoWrap.appendChild(el('h3', { style: 'margin:0 0 8px;' }, story.description || '-'));
-      infoWrap.appendChild(el('p', { style: 'margin:4px 0;color:#555;' }, `👤 Oleh: ${story.name || 'Anonim'}`));
-      infoWrap.appendChild(el('p', { style: 'margin:4px 0;color:#666;font-size:14px;' }, `🕒 ${createdAtText}`));
+      const descEl = el('h3', { style: 'margin:0 0 8px;' }, story.description || '-');
+      const nameEl = el('p', { style: 'margin:4px 0;color:#555;' }, `👤 Oleh: ${story.name || 'Anonim'}`);
+      const timeEl = el('p', { style: 'margin:4px 0;color:#666;font-size:14px;' }, `🕒 ${createdAtText}`);
+      infoWrap.append(descEl, nameEl, timeEl);
       section.appendChild(infoWrap);
 
       // tombol aksi
       const actionWrap = el('div', { style: 'margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;' });
 
-      // tombol edit (navigasi ke add story)
-      const editBtn = el('button', {
-        className: 'btn-alt',
-        onclick: () => alert('Fitur edit story dapat kamu kembangkan di submission lanjutan!')
-      }, '✏️ Edit');
+      // tombol edit
+      const editBtn = el('button', { className: 'btn-alt' }, '✏️ Edit');
 
       // tombol archive
       const archiveBtn = el('button', { className: 'btn' }, '📦 Archive');
@@ -96,14 +93,74 @@ export default class DetailView {
       }, '🗑 Delete');
 
       const archived = await isArchived(story.id);
-      if (archived) {
-        actionWrap.appendChild(unarchiveBtn);
-      } else {
-        actionWrap.appendChild(archiveBtn);
-      }
-      actionWrap.appendChild(editBtn);
-      actionWrap.appendChild(delBtn);
+      if (archived) actionWrap.appendChild(unarchiveBtn);
+      else actionWrap.appendChild(archiveBtn);
+      actionWrap.append(editBtn, delBtn);
       section.appendChild(actionWrap);
+
+      // elemen form edit (disembunyikan dulu)
+      const editWrap = el('div', {
+        style: 'display:none;margin-top:12px;border:1px solid #ddd;padding:12px;border-radius:8px;'
+      });
+
+      const nameInput = el('input', {
+        type: 'text',
+        value: story.name || '',
+        placeholder: 'Nama pengirim',
+        style: 'width:100%;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #ccc;'
+      });
+      const descInput = el('textarea', {
+        placeholder: 'Deskripsi cerita',
+        style: 'width:100%;height:80px;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #ccc;'
+      }, story.description || '');
+      const latInput = el('input', {
+        type: 'text',
+        value: story.lat || '',
+        placeholder: 'Latitude',
+        style: 'width:49%;margin-right:2%;padding:6px;border-radius:4px;border:1px solid #ccc;'
+      });
+      const lonInput = el('input', {
+        type: 'text',
+        value: story.lon || '',
+        placeholder: 'Longitude',
+        style: 'width:49%;padding:6px;border-radius:4px;border:1px solid #ccc;'
+      });
+      const saveBtn = el('button', {
+        className: 'btn',
+        style: 'margin-right:8px;'
+      }, '💾 Simpan');
+      const cancelBtn = el('button', { className: 'btn-alt' }, '❌ Batal');
+
+      editWrap.append(nameInput, descInput, el('div', {}, [latInput, lonInput]), saveBtn, cancelBtn);
+      section.appendChild(editWrap);
+
+      // event edit
+      editBtn.onclick = () => {
+        infoWrap.style.display = 'none';
+        editWrap.style.display = 'block';
+      };
+
+      // event batal
+      cancelBtn.onclick = () => {
+        editWrap.style.display = 'none';
+        infoWrap.style.display = 'block';
+      };
+
+      // event simpan
+      saveBtn.onclick = async () => {
+        story.name = nameInput.value.trim();
+        story.description = descInput.value.trim();
+        story.lat = latInput.value.trim();
+        story.lon = lonInput.value.trim();
+
+        await updateArchive(story); // simpan ke IndexedDB
+        descEl.textContent = story.description || '-';
+        nameEl.textContent = `👤 Oleh: ${story.name || 'Anonim'}`;
+
+        editWrap.style.display = 'none';
+        infoWrap.style.display = 'block';
+        alert('✅ Story berhasil diperbarui!');
+      };
 
       // map
       const mapDiv = el('div', {

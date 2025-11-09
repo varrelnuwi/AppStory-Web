@@ -13,7 +13,11 @@ export async function storyCard(story, onClick, options = {}) {
     style: `
       cursor: pointer;
       transition: transform .2s ease, box-shadow .2s ease;
-      position:relative;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     `
   });
 
@@ -36,10 +40,27 @@ export async function storyCard(story, onClick, options = {}) {
   };
   card.appendChild(img);
 
-  const content = el('div', { style: 'padding: 10px;' });
+  const content = el('div', { 
+    style: `
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+    `
+  });
+
   content.appendChild(
-    el('h3', { style: 'margin:0 0 6px;font-size:18px;' }, story.name || 'No Title')
+    el('h3', { 
+      style: `
+        margin:0 0 6px;
+        font-size:18px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      ` 
+    }, story.name || 'No Title')
   );
+
   const desc = el(
     'p',
     {
@@ -48,16 +69,24 @@ export async function storyCard(story, onClick, options = {}) {
         color: #555;
         font-size: 14px;
         line-height: 1.4;
+        word-wrap: break-word;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
         ${descriptionStyle}
       `
     },
     story.description || '-'
   );
   content.appendChild(desc);
+
   content.appendChild(
-    el('p', { style: 'margin:0;font-size:12px;color:#666;' },
+    el('p', { style: 'margin:0;font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' },
       story.createdAtText ? `📅 ${story.createdAtText}` : '')
   );
+
   card.appendChild(content);
 
   // label archive (async check)

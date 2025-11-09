@@ -7,6 +7,9 @@ export async function registerServiceWorker() {
     const registration = await navigator.serviceWorker.register('/sw.js');
     console.log('✅ Service Worker registered:', registration);
 
+    // Tunggu sampai aktif dulu sebelum lanjut setup push
+    await waitUntilActive(registration);
+
     // 🔁 Jika ada update baru
     registration.onupdatefound = () => {
       console.log('🔁 Service Worker update found');
@@ -20,10 +23,28 @@ export async function registerServiceWorker() {
   }
 }
 
+// ⏳ Tunggu sampai service worker aktif
+async function waitUntilActive(registration) {
+  if (registration.active) return;
+  await new Promise((resolve) => {
+    const interval = setInterval(() => {
+      if (registration.active) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 300);
+  });
+}
+
 // ✅ Push Notification Toggle
 async function setupPushToggle(registration) {
   const btn = document.getElementById('pushToggle');
   if (!btn) return;
+
+  // Pastikan izin notifikasi
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
 
   const sub = await registration.pushManager.getSubscription();
   let isSub = !!sub;
@@ -38,7 +59,7 @@ async function setupPushToggle(registration) {
         alert('Push notification disabled');
       } else {
         // ⚠️ Ganti dengan VAPID key milikmu dari server/API
-        const vapidKey = 'YOUR_PUBLIC_VAPID_KEY_FROM_API';
+        const vapidKey = 'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
         const converted = urlBase64ToUint8Array(vapidKey);
         const newSub = await registration.pushManager.subscribe({
           userVisibleOnly: true,
