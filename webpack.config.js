@@ -17,12 +17,8 @@ module.exports = {
   // 🟩 Dev server untuk mode development
   devServer: {
     static: [
-      {
-        directory: path.join(__dirname, 'dist'),
-      },
-      {
-        directory: path.join(__dirname, 'public'),
-      },
+      { directory: path.join(__dirname, 'dist') },
+      { directory: path.join(__dirname, 'public') },
     ],
     historyApiFallback: true,
     port: 8080,
@@ -55,6 +51,7 @@ module.exports = {
     // 🔹 Inject bundle ke public/index.html otomatis
     new HtmlWebpackPlugin({
       template: './public/index.html',
+      inject: 'body',
     }),
 
     // 🔹 Copy file static penting dari public → dist
@@ -63,6 +60,9 @@ module.exports = {
         { from: 'public/manifest.webmanifest', to: '' },
         { from: 'public/icons', to: 'icons' },
         { from: 'public/sw.js', to: '' },
+        { from: 'public/sw-register.js', to: '' },
+        { from: path.resolve(__dirname, 'src/app.css'), to: 'app.css' },
+        { from: 'node_modules/leaflet/dist/images', to: 'images' },
       ],
     }),
   ],

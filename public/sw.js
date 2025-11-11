@@ -1,105 +1,176 @@
-// src/sw.js
-const CACHE_NAME = 'story-app-v4';
+/* public/sw.js
+   ⚡ Story App Service Worker (v6)
+   - Instant offline navigation (cache-first)
+   - Background update + auto reload notification
+   - Network-first API with timeout fallback
+   - Fix clone/body errors
+   - Enable navigation preload
+*/
+
+const CACHE_NAME = 'story-app-shell-v6';
+const RUNTIME_CACHE = 'story-runtime-v3';
+const OSM_TILE_CACHE = 'osm-tiles-v1';
 const API_BASE = 'https://story-api.dicoding.dev/v1';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/icons/checklist.png',
   '/icons/book.png',
-  '/src/app.js',
-  '/src/app.css'
+  '/app.css'
 ];
 
-// names for runtime caches
-const RUNTIME_CACHE = 'story-runtime-v1';
-const OSM_TILE_CACHE = 'osm-tiles-v1';
-
-// Install - cache app shell
-self.addEventListener('install', (event) => {
-  event.waitUntil(
+// === INSTALL ===
+self.addEventListener('install', (evt) => {
+  evt.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
 
-// Activate - cleanup
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((key) => (key !== CACHE_NAME && key !== RUNTIME_CACHE && key !== OSM_TILE_CACHE) ? caches.delete(key) : Promise.resolve()))
-    )
+// === ACTIVATE ===
+self.addEventListener('activate', (evt) => {
+  evt.waitUntil(
+    (async () => {
+      // 🧹 Hapus cache lama
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.map((k) => {
+          if (![CACHE_NAME, RUNTIME_CACHE, OSM_TILE_CACHE].includes(k)) {
+            return caches.delete(k);
+          }
+        })
+      );
+
+      // ⚡ Aktifkan Navigation Preload (buat fetch lebih cepat)
+      if (self.registration.navigationPreload) {
+        await self.registration.navigationPreload.enable();
+      }
+    })()
   );
   self.clients.claim();
 });
 
-// Fetch - various strategies
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+// === Helper: Network-first with timeout (for API) ===
+async function networkFirstWithTimeout(req, timeout = 2500) {
+  const timer = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('timeout')), timeout)
+  );
 
-  // 1) OSM tile runtime caching (cache-first with network fallback then placeholder)
-  if (request.url.includes('tile.openstreetmap.org')) {
-    event.respondWith(
+  try {
+    const netRes = await Promise.race([fetch(req), timer]);
+    if (netRes && netRes.ok) {
+      const clone = netRes.clone();
+      const cache = await caches.open(RUNTIME_CACHE);
+      cache.put(req, clone);
+    }
+    return netRes;
+  } catch {
+    const cache = await caches.open(RUNTIME_CACHE);
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    return new Response(JSON.stringify({ error: true, message: 'offline' }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// === FETCH HANDLER ===
+self.addEventListener('fetch', (evt) => {
+  const req = evt.request;
+  if (req.method !== 'GET') return;
+
+  // 1️⃣ OSM Tiles → cache-first
+  if (req.url.includes('tile.openstreetmap.org')) {
+    evt.respondWith(
       caches.open(OSM_TILE_CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
+        const cached = await cache.match(req);
         if (cached) return cached;
         try {
-          const networkResp = await fetch(request);
-          // only cache valid images
-          if (networkResp && networkResp.status === 200) {
-            cache.put(request, networkResp.clone());
-          }
-          return networkResp;
-        } catch (e) {
-          // fallback to placeholder tile if exists
-          const fallback = await caches.match('/icons/location.png');
-          return fallback || new Response('', { status: 503, statusText: 'Offline' });
+          const net = await fetch(req);
+          if (net.ok) cache.put(req, net.clone());
+          return net;
+        } catch {
+          const placeholder = await caches.match('/icons/location.png');
+          return placeholder || new Response('', { status: 503, statusText: 'Offline' });
         }
       })
     );
     return;
   }
 
-  // 2) API requests - network-first, fallback to cache (so previously fetched API results available offline)
-  if (request.url.startsWith(API_BASE)) {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          // clone into runtime cache for later offline use
-          const resClone = res.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, resClone));
-          return res;
-        })
-        .catch(async () => {
-          const cached = await caches.match(request);
-          return cached || new Response(JSON.stringify({ error: true, message: 'offline' }), {
-            headers: { 'Content-Type': 'application/json' }
-          });
-        })
-    );
+  // 2️⃣ API → network-first with timeout
+  if (req.url.startsWith(API_BASE)) {
+    evt.respondWith(networkFirstWithTimeout(req, 2500));
     return;
   }
 
-  // 3) Static assets - cache-first
-  event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).catch(() => {
-      // fallback to index.html for navigation requests (SPA)
-      if (request.mode === 'navigate') return caches.match('/index.html');
-      return new Response('', { status: 503, statusText: 'Offline' });
-    }))
+  // 3️⃣ Navigations (HTML) → cache-first + background update + notify clients
+  if (req.mode === 'navigate') {
+    evt.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match('/index.html');
+
+      const preloadResp = await evt.preloadResponse;
+      if (preloadResp) {
+        cache.put('/index.html', preloadResp.clone());
+        return preloadResp;
+      }
+
+      // ⚡ tampilkan cache lama dulu biar cepat
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            cache.put('/index.html', res.clone());
+            // 🔔 kirim sinyal versi baru
+            self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
+              for (const client of clients) {
+                client.postMessage({ type: 'NEW_VERSION_AVAILABLE' });
+              }
+            });
+          }
+        })
+        .catch(() => {});
+      
+      return cached || (await fetch(req).catch(() => new Response('<h1>Offline</h1>', {
+        headers: { 'Content-Type': 'text/html' },
+      })));
+    })());
+    return;
+  }
+
+  // 4️⃣ Static assets → cache-first
+  evt.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req)
+        .then((res) => {
+          if (
+            res.ok &&
+            new URL(req.url).origin === self.location.origin &&
+            req.headers.get('accept') &&
+            !req.headers.get('accept').includes('text/html')
+          ) {
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(req, res.clone()));
+          }
+          return res;
+        })
+        .catch(() => new Response('', { status: 503, statusText: 'Offline' }));
+    })
   );
 });
 
-// Push Notification
+// === PUSH HANDLER ===
 self.addEventListener('push', (event) => {
   let data = {
     title: 'Story Notification',
     options: {
       body: 'Ada pembaruan story baru!',
       icon: '/icons/checklist.png',
-      badge: '/icons/badge_notif.png',
+      badge: '/icons/checklist.png',
       vibrate: [200, 100, 200],
+      data: { url: '/#/home' },
     },
   };
 
@@ -118,62 +189,20 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(data.title, data.options));
 });
 
-// Notification click
+// === NOTIFICATION CLICK HANDLER ===
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/#/home';
-  event.waitUntil(clients.openWindow(targetUrl));
-});
-
-// Background sync for offline stories (if used)
-self.addEventListener('sync', async (event) => {
-  if (event.tag === 'sync-new-story') {
-    event.waitUntil(syncOfflineStories());
-  }
-});
-
-async function syncOfflineStories() {
-  const db = await openDB();
-  const tx = db.transaction('offline-stories', 'readonly');
-  // using idb via modern browsers' .objectStore api not available here as helper library
-  // this function assumes the objectStore exists with keyPath 'id'
-  const store = tx.objectStore ? tx.objectStore('offline-stories') : null;
-  // Fallback: try to read via cursor (older handling)
-  // If store is not accessible, simply return
-  if (!store) return;
-  const allReq = store.getAll ? store.getAll() : null;
-  if (!allReq) return;
-  const stories = await new Promise((res) => {
-    allReq.onsuccess = () => res(allReq.result || []);
-    allReq.onerror = () => res([]);
-  });
-
-  for (const story of stories) {
-    try {
-      await fetch(`${API_BASE}/stories`, {
-        method: 'POST',
-        body: JSON.stringify(story),
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const delTx = db.transaction('offline-stories', 'readwrite');
-      delTx.objectStore('offline-stories').delete(story.id);
-    } catch (err) {
-      console.error('Sync failed:', err);
-    }
-  }
-}
-
-// simple IndexedDB open (used by syncOfflineStories)
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('story-app-db', 1);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('offline-stories')) {
-        db.createObjectStore('offline-stories', { keyPath: 'id' });
+  const target = event.notification.data?.url || '/#/home';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (w.url.includes('/') && 'focus' in w) {
+          w.focus();
+          w.postMessage({ type: 'navigate', url: target });
+          return;
+        }
       }
-    };
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
-}
+      return clients.openWindow(target);
+    })
+  );
+});

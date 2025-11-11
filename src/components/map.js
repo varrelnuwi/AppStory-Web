@@ -1,13 +1,17 @@
 // src/components/map.js
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-// ✅ Fix icon path agar muncul di Webpack build
+// ✅ Import semua aset marker Leaflet (agar tidak 404 di Webpack)
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+// ✅ Override default path agar Leaflet pakai aset dari Webpack
 L.Icon.Default.mergeOptions({
+  iconRetinaUrl,
   iconUrl,
-  shadowUrl: iconShadow,
+  shadowUrl,
 });
 
 let mapInstance = null;
@@ -31,14 +35,12 @@ export function createMap({ elementId = 'map', center = [-2.5, 118], zoom = 5 } 
   }
 
   // Buat peta baru
-  mapInstance = L.map(elementId, {
-    zoomControl: true,
-  }).setView(center, zoom);
+  mapInstance = L.map(elementId, { zoomControl: true }).setView(center, zoom);
 
   // Tile layer OpenStreetMap
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap Contributors'
+    attribution: '&copy; OpenStreetMap Contributors',
   }).addTo(mapInstance);
 
   // Marker group

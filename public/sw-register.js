@@ -1,4 +1,6 @@
-// src/sw-register.js
+// public/sw-register.js
+// ✅ Registrasi Service Worker + Push Notification + Online Status
+
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
@@ -7,7 +9,15 @@ export async function registerServiceWorker() {
     const registration = await navigator.serviceWorker.register('/sw.js');
     console.log('✅ Service Worker registered:', registration);
 
-    // Tunggu sampai aktif dulu sebelum lanjut setup push
+    // 🩵 FIX: tangani kondisi redundant agar tidak ada konflik SW lama
+    if (registration.active && registration.active.state === 'redundant') {
+      console.warn('⚠️ SW redundant detected. Unregistering old version...');
+      await registration.unregister();
+      window.location.reload();
+      return;
+    }
+
+    // Tunggu sampai aktif sebelum lanjut
     await waitUntilActive(registration);
 
     // 🔁 Jika ada update baru
@@ -59,7 +69,8 @@ async function setupPushToggle(registration) {
         alert('Push notification disabled');
       } else {
         // ⚠️ Ganti dengan VAPID key milikmu dari server/API
-        const vapidKey = 'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
+        const vapidKey =
+          'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
         const converted = urlBase64ToUint8Array(vapidKey);
         const newSub = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -68,7 +79,12 @@ async function setupPushToggle(registration) {
         console.log('📬 New Push Subscription:', newSub);
         isSub = true;
         btn.textContent = 'Disable Notifications';
-        alert('Push notification enabled!');
+
+        // 🩵 FIX: kirim test notification lokal agar user tahu berhasil
+        registration.showNotification('Push Aktif 🎉', {
+          body: 'Push notification berhasil diaktifkan!',
+          icon: '/icons/checklist.png',
+        });
       }
     } catch (err) {
       console.error('❌ Push toggle failed:', err);
