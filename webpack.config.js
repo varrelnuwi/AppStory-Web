@@ -2,21 +2,16 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
-const isProd = process.env.NODE_ENV === 'production'; // deteksi mode build
-
 module.exports = {
-  // 🟩 Entry utama
   entry: './src/index.js',
 
-  // 🟩 Output build
   output: {
     filename: 'bundle.[contenthash].js',
-    path: path.resolve(__dirname, isProd ? 'docs' : 'dist'), 
+    path: path.resolve(__dirname, 'dist'), // ⬅️ cukup dist saja
     clean: true,
-    publicPath: isProd ? '/AppStory-Web/' : '/', 
+    publicPath: '/', 
   },
 
-  // 🟩 Dev server (untuk localhost)
   devServer: {
     static: [
       { directory: path.join(__dirname, 'dist') },
@@ -26,7 +21,6 @@ module.exports = {
     port: 8080,
   },
 
-  // 🟩 Loader untuk JS, CSS, dan asset
   module: {
     rules: [
       {
@@ -48,12 +42,10 @@ module.exports = {
     ],
   },
 
-  // 🟩 Plugins
   plugins: [
     new HtmlWebpackPlugin({
       template: './public/index.html',
       inject: 'body',
-      publicPath: isProd ? '/AppStory-Web/' : '/', // penting biar JS path benar di deploy
     }),
 
     new CopyWebpackPlugin({
