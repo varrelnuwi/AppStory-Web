@@ -6,7 +6,7 @@ export async function registerServiceWorker() {
 
   try {
     // ✅ Gunakan path absolut agar tidak 404 di dev (webpack)
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.register('./sw.js');
     console.log('✅ Service Worker registered:', registration);
 
     // 🩵 FIX: tangani kondisi redundant agar tidak ada konflik SW lama

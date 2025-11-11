@@ -2,6 +2,8 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
+const isProd = process.env.NODE_ENV === 'production'; // deteksi mode build
+
 module.exports = {
   // 🟩 Entry utama
   entry: './src/index.js',
@@ -9,12 +11,12 @@ module.exports = {
   // 🟩 Output build
   output: {
     filename: 'bundle.[contenthash].js',
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, isProd ? 'docs' : 'dist'), 
     clean: true,
-    publicPath: '/', // biar path absolut (untuk SW & routing)
+    publicPath: isProd ? '/AppStory-Web/' : '/', 
   },
 
-  // 🟩 Dev server untuk mode development
+  // 🟩 Dev server (untuk localhost)
   devServer: {
     static: [
       { directory: path.join(__dirname, 'dist') },
@@ -46,15 +48,14 @@ module.exports = {
     ],
   },
 
-  // 🟩 Plugin
+  // 🟩 Plugins
   plugins: [
-    // 🔹 Inject bundle ke public/index.html otomatis
     new HtmlWebpackPlugin({
       template: './public/index.html',
       inject: 'body',
+      publicPath: isProd ? '/AppStory-Web/' : '/', // penting biar JS path benar di deploy
     }),
 
-    // 🔹 Copy file static penting dari public → dist
     new CopyWebpackPlugin({
       patterns: [
         { from: 'public/manifest.webmanifest', to: '' },

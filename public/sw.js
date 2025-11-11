@@ -1,13 +1,6 @@
-/* public/sw.js
-   ⚡ Story App Service Worker (v6)
-   - Instant offline navigation (cache-first)
-   - Background update + auto reload notification
-   - Network-first API with timeout fallback
-   - Fix clone/body errors
-   - Enable navigation preload
-*/
+/* public/sw.js*/
 
-const CACHE_NAME = 'story-app-shell-v6';
+const CACHE_NAME = 'story-app-shell-v7';
 const RUNTIME_CACHE = 'story-runtime-v3';
 const OSM_TILE_CACHE = 'osm-tiles-v1';
 const API_BASE = 'https://story-api.dicoding.dev/v1';
@@ -33,7 +26,6 @@ self.addEventListener('install', (evt) => {
 self.addEventListener('activate', (evt) => {
   evt.waitUntil(
     (async () => {
-      // 🧹 Hapus cache lama
       const keys = await caches.keys();
       await Promise.all(
         keys.map((k) => {
@@ -43,7 +35,6 @@ self.addEventListener('activate', (evt) => {
         })
       );
 
-      // ⚡ Aktifkan Navigation Preload (buat fetch lebih cepat)
       if (self.registration.navigationPreload) {
         await self.registration.navigationPreload.enable();
       }
@@ -61,9 +52,13 @@ async function networkFirstWithTimeout(req, timeout = 2500) {
   try {
     const netRes = await Promise.race([fetch(req), timer]);
     if (netRes && netRes.ok) {
-      const clone = netRes.clone();
-      const cache = await caches.open(RUNTIME_CACHE);
-      cache.put(req, clone);
+      try {
+        const clone = netRes.clone();
+        const cache = await caches.open(RUNTIME_CACHE);
+        cache.put(req, clone);
+      } catch (err) {
+        console.warn('[SW] cache.put failed:', err);
+      }
     }
     return netRes;
   } catch {
@@ -106,7 +101,7 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // 3️⃣ Navigations (HTML) → cache-first + background update + notify clients
+  // 3️⃣ Navigations (HTML)
   if (req.mode === 'navigate') {
     evt.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -114,21 +109,27 @@ self.addEventListener('fetch', (evt) => {
 
       const preloadResp = await evt.preloadResponse;
       if (preloadResp) {
-        cache.put('/index.html', preloadResp.clone());
+        try {
+          cache.put('/index.html', preloadResp.clone());
+        } catch (err) {
+          console.warn('[SW] preload clone fail:', err);
+        }
         return preloadResp;
       }
 
-      // ⚡ tampilkan cache lama dulu biar cepat
       fetch(req)
         .then((res) => {
-          if (res.ok) {
-            cache.put('/index.html', res.clone());
-            // 🔔 kirim sinyal versi baru
-            self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
-              for (const client of clients) {
-                client.postMessage({ type: 'NEW_VERSION_AVAILABLE' });
-              }
-            });
+          if (res.ok && !res.bodyUsed) {
+            try {
+              cache.put('/index.html', res.clone());
+              self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
+                for (const client of clients) {
+                  client.postMessage({ type: 'NEW_VERSION_AVAILABLE' });
+                }
+              });
+            } catch (err) {
+              console.warn('[SW] index.html clone fail:', err);
+            }
           }
         })
         .catch(() => {});
@@ -140,19 +141,25 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // 4️⃣ Static assets → cache-first
+  // 4️⃣ Static assets → cache-first (✅ FIXED CLONE)
   evt.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req)
         .then((res) => {
-          if (
-            res.ok &&
-            new URL(req.url).origin === self.location.origin &&
-            req.headers.get('accept') &&
-            !req.headers.get('accept').includes('text/html')
-          ) {
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(req, res.clone()));
+          try {
+            if (
+              res.ok &&
+              !res.bodyUsed && // 🔒 fix body already used
+              new URL(req.url).origin === self.location.origin &&
+              req.headers.get('accept') &&
+              !req.headers.get('accept').includes('text/html')
+            ) {
+              const clone = res.clone();
+              caches.open(RUNTIME_CACHE).then((cache) => cache.put(req, clone));
+            }
+          } catch (err) {
+            console.warn('[SW] static cache clone failed:', err);
           }
           return res;
         })
