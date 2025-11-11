@@ -9,7 +9,7 @@ module.exports = {
     filename: 'bundle.[contenthash].js',
     path: path.resolve(__dirname, 'dist'), // ⬅️ cukup dist saja
     clean: true,
-    publicPath: '/', 
+    publicPath: '/AppStory-Web/', 
   },
 
   devServer: {
