@@ -20,7 +20,7 @@ export default class Header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-      `
+      `,
     });
 
     header.appendChild(el('h1', { className: 'logo' }, 'Story App'));
@@ -40,25 +40,24 @@ export default class Header {
     links.push(homeLink);
 
     if (this.presenter && this.presenter.token) {
-      const addLink = el(
-        'a',
-        {
-          href: '#/add',
-          className: this._isActive(currentHash, '#/add') ? 'btn-alt active' : 'btn-alt',
-        },
-        'Add Story'
+      links.push(
+        el(
+          'a',
+          {
+            href: '#/add',
+            className: this._isActive(currentHash, '#/add') ? 'btn-alt active' : 'btn-alt',
+          },
+          'Add Story'
+        ),
+        el(
+          'a',
+          {
+            href: '#/archive',
+            className: this._isActive(currentHash, '#/archive') ? 'btn-alt active' : 'btn-alt',
+          },
+          'Archive'
+        )
       );
-      links.push(addLink);
-
-      const archiveLink = el(
-        'a',
-        {
-          href: '#/archive',
-          className: this._isActive(currentHash, '#/archive') ? 'btn-alt active' : 'btn-alt',
-        },
-        'Archive'
-      );
-      links.push(archiveLink);
     }
 
     // Inject style hanya sekali
@@ -66,7 +65,7 @@ export default class Header {
       const style = document.createElement('style');
       style.id = 'header-hover-style';
       style.textContent = `
-        body { margin: 0; padding-top: 80px; } /* ✅ Tambahkan padding agar konten tidak ketimpa header */
+        body { margin: 0; padding-top: 80px; }
         .nav { display:flex; align-items:center; gap:8px; }
         .nav .btn-alt {
           color: #333;
@@ -102,19 +101,20 @@ export default class Header {
 
     links.forEach((l) => nav.appendChild(l));
 
-    const pushEnabled = localStorage.getItem('pushEnabled') === 'true';
+    // 🟢 Push button hanya dirender — logic ditangani sw-register.js
     const pushBtn = el(
       'button',
       {
         id: 'pushToggle',
-        className: pushEnabled ? 'btn-alt active' : 'btn-alt',
+        className: 'btn-alt',
         title: 'Toggle push notifications',
         style: 'margin-left:8px;',
       },
-      pushEnabled ? '🔔 Notifikasi ON' : '🔕 Notifikasi OFF'
+      '🔕 Notifikasi OFF'
     );
     nav.appendChild(pushBtn);
 
+    // 🟢 Network status
     const statusIndicator = el(
       'span',
       {
@@ -129,7 +129,7 @@ export default class Header {
           background: ${navigator.onLine ? '#2ecc71' : '#e74c3c'};
         `,
         role: 'status',
-        'aria-live': 'polite'
+        'aria-live': 'polite',
       },
       navigator.onLine ? 'Online' : 'Offline'
     );
@@ -139,36 +139,38 @@ export default class Header {
     window.addEventListener('offline', () => this.updateStatus());
 
     if (this.presenter && this.presenter.token) {
-      const logoutBtn = el(
-        'button',
-        {
-          className: 'btn',
-          onclick: () => {
-            this.presenter.clearSession();
-            window.location.hash = '#/login';
+      nav.appendChild(
+        el(
+          'button',
+          {
+            className: 'btn',
+            onclick: () => {
+              this.presenter.clearSession();
+              window.location.hash = '#/login';
+            },
           },
-        },
-        'Logout'
+          'Logout'
+        )
       );
-      nav.appendChild(logoutBtn);
     } else {
-      const loginLink = el(
-        'a',
-        {
-          href: '#/login',
-          className: this._isActive(currentHash, '#/login') ? 'btn-alt active' : 'btn-alt',
-        },
-        'Login'
+      nav.append(
+        el(
+          'a',
+          {
+            href: '#/login',
+            className: this._isActive(currentHash, '#/login') ? 'btn-alt active' : 'btn-alt',
+          },
+          'Login'
+        ),
+        el(
+          'a',
+          {
+            href: '#/register',
+            className: this._isActive(currentHash, '#/register') ? 'btn active' : 'btn',
+          },
+          'Register'
+        )
       );
-      const registerLink = el(
-        'a',
-        {
-          href: '#/register',
-          className: this._isActive(currentHash, '#/register') ? 'btn active' : 'btn',
-        },
-        'Register'
-      );
-      nav.append(loginLink, registerLink);
     }
 
     header.appendChild(nav);
@@ -189,12 +191,7 @@ export default class Header {
   updateStatus() {
     const elStatus = document.getElementById('networkStatus');
     if (!elStatus) return;
-    if (navigator.onLine) {
-      elStatus.textContent = 'Online';
-      elStatus.style.background = '#2ecc71';
-    } else {
-      elStatus.textContent = 'Offline';
-      elStatus.style.background = '#e74c3c';
-    }
+    elStatus.textContent = navigator.onLine ? 'Online' : 'Offline';
+    elStatus.style.background = navigator.onLine ? '#2ecc71' : '#e74c3c';
   }
 }

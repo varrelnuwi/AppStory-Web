@@ -1,6 +1,6 @@
 /* public/sw.js*/
 
-const CACHE_NAME = 'story-app-shell-v7';
+const CACHE_NAME = 'story-app-shell-v8 + new Date().getTime()';
 const RUNTIME_CACHE = 'story-runtime-v3';
 const OSM_TILE_CACHE = 'osm-tiles-v1';
 const API_BASE = 'https://story-api.dicoding.dev/v1';

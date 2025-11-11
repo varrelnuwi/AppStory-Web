@@ -1,15 +1,15 @@
 // public/sw-register.js
-// ✅ Registrasi Service Worker + Push Notification + Online Status
+// ✅ Registrasi Service Worker + Push Notification + Online Status (FINAL)
 
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
   try {
-    // ✅ Gunakan path absolut agar tidak 404 di dev (webpack)
+    // ✅ Gunakan path relatif agar berfungsi di localhost & GitHub Pages
     const registration = await navigator.serviceWorker.register('./sw.js');
     console.log('✅ Service Worker registered:', registration);
 
-    // 🩵 FIX: tangani kondisi redundant agar tidak ada konflik SW lama
+    // 🩵 FIX redundant SW
     if (registration.active && registration.active.state === 'redundant') {
       console.warn('⚠️ SW redundant detected. Unregistering old version...');
       await registration.unregister();
@@ -17,15 +17,13 @@ export async function registerServiceWorker() {
       return;
     }
 
-    // Tunggu sampai aktif sebelum lanjut
     await waitUntilActive(registration);
 
-    // 🔁 Jika ada update baru
     registration.onupdatefound = () => {
       console.log('🔁 Service Worker update found');
     };
 
-    // 🔔 Push & network status handler
+    // 🔔 Push + network
     setupPushToggle(registration);
     setupOnlineStatus();
   } catch (err) {
@@ -33,7 +31,6 @@ export async function registerServiceWorker() {
   }
 }
 
-// ⏳ Tunggu sampai service worker aktif
 async function waitUntilActive(registration) {
   if (registration.active) return;
   await new Promise((resolve) => {
@@ -48,8 +45,17 @@ async function waitUntilActive(registration) {
 
 // ✅ Push Notification Toggle
 async function setupPushToggle(registration) {
-  const btn = document.getElementById('pushToggle');
-  if (!btn) return;
+  // Tunggu tombol muncul di DOM
+  let btn;
+  for (let i = 0; i < 20; i++) {
+    btn = document.getElementById('pushToggle');
+    if (btn) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  if (!btn) {
+    console.warn('⚠️ pushToggle button not found in DOM');
+    return;
+  }
 
   // Pastikan izin notifikasi
   if (Notification.permission === 'default') {
@@ -58,17 +64,16 @@ async function setupPushToggle(registration) {
 
   const sub = await registration.pushManager.getSubscription();
   let isSub = !!sub;
-  btn.textContent = isSub ? 'Disable Notifications' : 'Enable Notifications';
+  updateButtonUI(btn, isSub);
 
   btn.onclick = async () => {
     try {
       if (isSub && sub) {
         await sub.unsubscribe();
         isSub = false;
-        btn.textContent = 'Enable Notifications';
+        updateButtonUI(btn, isSub);
         alert('Push notification disabled');
       } else {
-        // ⚠️ Ganti dengan VAPID key milikmu dari server/API
         const vapidKey =
           'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
         const converted = urlBase64ToUint8Array(vapidKey);
@@ -78,12 +83,11 @@ async function setupPushToggle(registration) {
         });
         console.log('📬 New Push Subscription:', newSub);
         isSub = true;
-        btn.textContent = 'Disable Notifications';
+        updateButtonUI(btn, isSub);
 
-        // 🩵 FIX: kirim test notification lokal agar user tahu berhasil
         registration.showNotification('Push Aktif 🎉', {
           body: 'Push notification berhasil diaktifkan!',
-          icon: '/icons/checklist.png',
+          icon: './icons/checklist.png',
         });
       }
     } catch (err) {
@@ -91,6 +95,13 @@ async function setupPushToggle(registration) {
       alert('Gagal mengubah status push notification.');
     }
   };
+}
+
+// 🔧 Helper untuk update tampilan tombol
+function updateButtonUI(btn, isSub) {
+  localStorage.setItem('pushEnabled', isSub ? 'true' : 'false');
+  btn.textContent = isSub ? '🔔 Notifikasi ON' : '🔕 Notifikasi OFF';
+  btn.className = isSub ? 'btn-alt active' : 'btn-alt';
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -104,7 +115,7 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// ✅ Online/Offline status indicator
+// ✅ Online/Offline indicator
 function setupOnlineStatus() {
   const indicator = document.getElementById('networkStatus');
   if (!indicator) return;
