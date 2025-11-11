@@ -4,3 +4,5 @@ https://varrelnuwi.github.io/AppStory-Web/
 login> 
 email: rashelkaspace@gmail.com
 password: coba@123
+
+catatan: tiap menggunakan button push notification harus selalu hard refresh agar bisa berfungsi

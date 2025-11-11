@@ -1,15 +1,13 @@
 // public/sw-register.js
-// ✅ Registrasi Service Worker + Push Notification + Online Status (FINAL)
+// ✅ Registrasi Service Worker + Push Notification + Online Status (FINAL FIX DICODING INTEGRATION)
 
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
   try {
-    // ✅ Gunakan path relatif agar berfungsi di localhost & GitHub Pages
     const registration = await navigator.serviceWorker.register('./sw.js');
     console.log('✅ Service Worker registered:', registration);
 
-    // 🩵 FIX redundant SW
     if (registration.active && registration.active.state === 'redundant') {
       console.warn('⚠️ SW redundant detected. Unregistering old version...');
       await registration.unregister();
@@ -18,12 +16,8 @@ export async function registerServiceWorker() {
     }
 
     await waitUntilActive(registration);
+    registration.onupdatefound = () => console.log('🔁 Service Worker update found');
 
-    registration.onupdatefound = () => {
-      console.log('🔁 Service Worker update found');
-    };
-
-    // 🔔 Push + network
     setupPushToggle(registration);
     setupOnlineStatus();
   } catch (err) {
@@ -43,9 +37,8 @@ async function waitUntilActive(registration) {
   });
 }
 
-// ✅ Push Notification Toggle
+// ✅ Push Notification Toggle + Dicoding Integration
 async function setupPushToggle(registration) {
-  // Tunggu tombol muncul di DOM
   let btn;
   for (let i = 0; i < 20; i++) {
     btn = document.getElementById('pushToggle');
@@ -57,7 +50,6 @@ async function setupPushToggle(registration) {
     return;
   }
 
-  // Pastikan izin notifikasi
   if (Notification.permission === 'default') {
     await Notification.requestPermission();
   }
@@ -68,12 +60,29 @@ async function setupPushToggle(registration) {
 
   btn.onclick = async () => {
     try {
+      const token = localStorage.getItem('token'); // pastikan token user disimpan setelah login
+      if (!token) {
+        alert('Silakan login terlebih dahulu sebelum mengaktifkan notifikasi.');
+        return;
+      }
+
       if (isSub && sub) {
+        // 🔸 Hapus langganan di server Dicoding
+        await fetch('https://story-api.dicoding.dev/v1/notifications/subscribe', {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+
         await sub.unsubscribe();
         isSub = false;
         updateButtonUI(btn, isSub);
         alert('Push notification disabled');
       } else {
+        // 🔸 Buat langganan baru
         const vapidKey =
           'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
         const converted = urlBase64ToUint8Array(vapidKey);
@@ -81,7 +90,21 @@ async function setupPushToggle(registration) {
           userVisibleOnly: true,
           applicationServerKey: converted,
         });
-        console.log('📬 New Push Subscription:', newSub);
+
+        // 🔸 Kirim ke API Dicoding agar push bisa dikirim
+        await fetch('https://story-api.dicoding.dev/v1/notifications/subscribe', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            endpoint: newSub.endpoint,
+            keys: newSub.toJSON().keys,
+          }),
+        });
+
+        console.log('📬 Subscription sent to Dicoding:', newSub);
         isSub = true;
         updateButtonUI(btn, isSub);
 
@@ -131,5 +154,4 @@ function setupOnlineStatus() {
   update();
 }
 
-// ✅ Jalankan otomatis
 registerServiceWorker();
