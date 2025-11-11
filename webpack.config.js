@@ -48,6 +48,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './public/index.html',
       inject: 'body',
+      publicPath: isProd ? '/AppStory-Web/' : '/',
     }),
 
     new CopyWebpackPlugin({
