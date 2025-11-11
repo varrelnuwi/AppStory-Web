@@ -2,6 +2,8 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
+const isProd = process.env.NODE_ENV === 'production';
+
 module.exports = {
   entry: './src/index.js',
 
@@ -9,7 +11,7 @@ module.exports = {
     filename: 'bundle.[contenthash].js',
     path: path.resolve(__dirname, 'dist'), // ⬅️ cukup dist saja
     clean: true,
-    publicPath: '/AppStory-Web/', 
+    publicPath: isProd ? '/AppStory-Web/' : '/',
   },
 
   devServer: {
