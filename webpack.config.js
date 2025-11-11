@@ -2,16 +2,20 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
+// 🟢 Deteksi environment
 const isProd = process.env.NODE_ENV === 'production';
+const repoName = 'AppStory-Web';
 
 module.exports = {
   entry: './src/index.js',
 
   output: {
     filename: 'bundle.[contenthash].js',
-    path: path.resolve(__dirname, 'dist'), // ⬅️ cukup dist saja
+    // ⬇️ Build ke dist saat dev, ke docs saat production (deploy)
+    path: path.resolve(__dirname, isProd ? 'docs' : 'dist'),
     clean: true,
-    publicPath: isProd ? '/AppStory-Web/' : '/',
+    // ⬇️ GitHub Pages butuh prefix /AppStory-Web/
+    publicPath: isProd ? `/${repoName}/` : '/',
   },
 
   devServer: {
@@ -48,7 +52,6 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './public/index.html',
       inject: 'body',
-      publicPath: isProd ? '/AppStory-Web/' : '/',
     }),
 
     new CopyWebpackPlugin({
